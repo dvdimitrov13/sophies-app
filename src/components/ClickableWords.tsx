@@ -106,8 +106,8 @@ export default function ClickableWords({
                 isTarget
                   ? "font-bold"
                   : isLookedUp
-                    ? "text-indigo-500 transition-colors"
-                    : `cursor-pointer border-b border-dashed border-gray-300 hover:border-indigo-400 hover:text-indigo-600 transition-colors ${
+                    ? "bg-yellow-200/60 rounded-sm px-0.5 -mx-0.5 transition-colors"
+                    : `cursor-pointer border-b border-dashed border-gray-300 hover:bg-yellow-100/50 hover:rounded-sm transition-colors ${
                         disabled ? "cursor-default opacity-60" : ""
                       }`
               }
