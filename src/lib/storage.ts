@@ -1,21 +1,30 @@
 import { Flashcard } from "./types";
 
-const STORAGE_KEY = "sophies-flashcards";
-
-export function loadCards(): Flashcard[] {
-  if (typeof window === "undefined") return [];
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (!data) return [];
-  try {
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
+export async function loadCards(): Promise<Flashcard[]> {
+  const res = await fetch("/api/cards");
+  if (!res.ok) return [];
+  return res.json();
 }
 
-export function saveCards(cards: Flashcard[]): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+export async function addCard(card: Flashcard): Promise<{ error?: string }> {
+  const res = await fetch("/api/cards", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    return { error: data.error || "Failed to save card" };
+  }
+  return {};
+}
+
+export async function updateCard(card: Flashcard): Promise<void> {
+  await fetch("/api/cards", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(card),
+  });
 }
 
 export function isDuplicate(cards: Flashcard[], englishWord: string): boolean {

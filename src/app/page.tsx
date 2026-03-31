@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signOut } from "next-auth/react";
 import { Flashcard } from "@/lib/types";
 import { getCardsForReview } from "@/lib/spaced-repetition";
-import { loadCards, saveCards } from "@/lib/storage";
+import { loadCards, addCard, updateCard } from "@/lib/storage";
 import AddCard from "@/components/AddCard";
 import ReviewSession from "@/components/ReviewSession";
 import TopicBrowser from "@/components/TopicBrowser";
@@ -17,22 +16,24 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setCards(loadCards());
-    setLoaded(true);
+    loadCards().then((c) => {
+      setCards(c);
+      setLoaded(true);
+    });
   }, []);
 
-  useEffect(() => {
-    if (loaded) saveCards(cards);
-  }, [cards, loaded]);
-
-  const handleAddCard = useCallback((card: Flashcard) => {
-    setCards((prev) => [...prev, card]);
+  const handleAddCard = useCallback(async (card: Flashcard) => {
+    const result = await addCard(card);
+    if (!result.error) {
+      setCards((prev) => [...prev, card]);
+    }
   }, []);
 
-  const handleUpdateCard = useCallback((updated: Flashcard) => {
+  const handleUpdateCard = useCallback(async (updated: Flashcard) => {
     setCards((prev) =>
       prev.map((c) => (c.id === updated.id ? updated : c))
     );
+    await updateCard(updated);
   }, []);
 
   const dueCount = loaded ? getCardsForReview(cards).length : 0;
@@ -47,7 +48,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex justify-between items-start">
           <div>
@@ -58,16 +58,15 @@ export default function Home() {
               {cards.length} cards &middot; {dueCount} due for review
             </p>
           </div>
-          <button
-            onClick={() => signOut()}
+          <a
+            href="/api/auth/signout"
             className="text-sm text-gray-400 hover:text-gray-600 transition-colors mt-1"
           >
             Sign out
-          </button>
+          </a>
         </div>
       </header>
 
-      {/* Navigation */}
       <nav className="bg-white border-b border-gray-100">
         <div className="max-w-2xl mx-auto px-4 flex">
           {(
@@ -95,7 +94,6 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-8">
         {activeTab === "add" && (
           <AddCard cards={cards} onAdd={handleAddCard} />
