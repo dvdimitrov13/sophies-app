@@ -5,6 +5,7 @@ import { useState } from "react";
 interface Props {
   sentence: string;
   fromLanguage: "bg" | "en";
+  targetWord: string;
   onLookup: () => void;
   disabled?: boolean;
 }
@@ -17,16 +18,28 @@ interface WordState {
 export default function ClickableWords({
   sentence,
   fromLanguage,
+  targetWord,
   onLookup,
   disabled,
 }: Props) {
   const [wordStates, setWordStates] = useState<Record<number, WordState>>({});
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [lookedUpIndices, setLookedUpIndices] = useState<Set<number>>(
+    new Set()
+  );
 
   const words = sentence.split(/\s+/);
 
+  const normalizedTarget = targetWord.toLowerCase().replace(/[.,!?;:'"—–\-()]/g, "");
+
+  function isTargetWord(word: string): boolean {
+    const cleaned = word.toLowerCase().replace(/[.,!?;:'"—–\-()]/g, "");
+    return cleaned === normalizedTarget;
+  }
+
   async function handleWordClick(index: number) {
     if (disabled) return;
+    if (isTargetWord(words[index])) return;
 
     // If already translated, just toggle visibility
     if (wordStates[index]?.translation) {
@@ -43,7 +56,12 @@ export default function ClickableWords({
       [index]: { translation: null, loading: true },
     }));
     setActiveIndex(index);
-    onLookup();
+
+    // Only charge for first lookup of this word
+    if (!lookedUpIndices.has(index)) {
+      setLookedUpIndices((prev) => new Set(prev).add(index));
+      onLookup();
+    }
 
     try {
       const res = await fetch("/api/translate-word", {
@@ -73,19 +91,24 @@ export default function ClickableWords({
       {words.map((word, i) => {
         const state = wordStates[i];
         const isActive = activeIndex === i;
+        const isTarget = isTargetWord(word);
 
         return (
-          <span key={i} className="relative inline-block">
+          <span key={i} className="relative inline">
             <span
               onClick={() => handleWordClick(i)}
-              className={`cursor-pointer border-b border-dashed border-gray-300 hover:border-indigo-400 hover:text-indigo-600 transition-colors ${
-                disabled ? "cursor-default opacity-60" : ""
-              }`}
+              className={
+                isTarget
+                  ? "font-bold"
+                  : `cursor-pointer border-b border-dashed border-gray-300 hover:border-indigo-400 hover:text-indigo-600 transition-colors ${
+                      disabled ? "cursor-default opacity-60" : ""
+                    }`
+              }
             >
               {word}
             </span>
 
-            {isActive && state && (
+            {isActive && state && !isTarget && (
               <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-20 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap shadow-lg">
                 {state.loading ? "..." : state.translation}
               </span>

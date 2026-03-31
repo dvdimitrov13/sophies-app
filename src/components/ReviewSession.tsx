@@ -296,6 +296,7 @@ export default function ReviewSession({
             <ClickableWords
               sentence={promptSentence}
               fromLanguage={sentenceLang}
+              targetWord={promptWord}
               onLookup={() => setWordLookups((n) => n + 1)}
               disabled={phase === "result"}
             />
