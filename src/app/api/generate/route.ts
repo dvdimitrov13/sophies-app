@@ -20,17 +20,17 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `You are a Bulgarian language teaching assistant. Given the English word "${word}", provide:
+          content: `You are a Bulgarian language teaching assistant helping an A1-A2 beginner. Given the English word "${word}", provide:
 
-1. The Bulgarian translation (in Cyrillic)
-2. A simple, natural Bulgarian sentence using this word (in Cyrillic) — suitable for an A1-A2 learner
-3. The English translation of that sentence
+1. The most common, basic Bulgarian translation (in Cyrillic). Always prefer the simplest, most frequently used form of the word — the one a beginner would learn first. For example: "where" → "къде" (not "където"), "that" → "това" (not "който"), "what" → "какво" (not "което").
+2. A simple, natural Bulgarian sentence using this exact word form (in Cyrillic). Questions are great for question words (къде, какво, кога, etc.). Keep it short (5-8 words), using only basic A1-A2 vocabulary.
+3. The English translation of that sentence.
 4. A semantic topic category for this word (one of: приветствия/greetings, семейство/family, храна/food, цветове/colors, числа/numbers, дрехи/clothing, тяло/body, дом/home, спалня/bedroom, кухня/kitchen, баня/bathroom, животни/animals, природа/nature, време/weather, професии/professions, транспорт/transport, училище/school, емоции/emotions, действия/actions, време-часове/time, пазаруване/shopping, здраве/health, спорт/sport, технологии/technology, друго/other)
 
 Respond ONLY in this exact JSON format, no markdown:
 {"bulgarianWord": "...", "bulgarianSentence": "...", "englishSentence": "...", "topic": "..."}
 
-The topic value should be the Bulgarian word from the list above (e.g. "спалня" not "bedroom"). Keep the sentence short (5-10 words).`,
+The topic value should be the Bulgarian word from the list above (e.g. "спалня" not "bedroom").`,
         },
       ],
     });
