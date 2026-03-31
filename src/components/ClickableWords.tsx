@@ -23,14 +23,16 @@ export default function ClickableWords({
   disabled,
 }: Props) {
   const [wordStates, setWordStates] = useState<Record<number, WordState>>({});
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [lookedUpIndices, setLookedUpIndices] = useState<Set<number>>(
     new Set()
   );
 
   const words = sentence.split(/\s+/);
 
-  const normalizedTarget = targetWord.toLowerCase().replace(/[.,!?;:'"—–\-()]/g, "");
+  const normalizedTarget = targetWord
+    .toLowerCase()
+    .replace(/[.,!?;:'"—–\-()]/g, "");
 
   function isTargetWord(word: string): boolean {
     const cleaned = word.toLowerCase().replace(/[.,!?;:'"—–\-()]/g, "");
@@ -40,14 +42,9 @@ export default function ClickableWords({
   async function handleWordClick(index: number) {
     if (disabled) return;
     if (isTargetWord(words[index])) return;
+    // Already looked up — do nothing on click, hover handles it now
+    if (wordStates[index]?.translation) return;
 
-    // If already translated, just toggle visibility
-    if (wordStates[index]?.translation) {
-      setActiveIndex(activeIndex === index ? null : index);
-      return;
-    }
-
-    // Strip punctuation for the API call
     const rawWord = words[index].replace(/[.,!?;:'"—–\-()]/g, "");
     if (!rawWord) return;
 
@@ -55,9 +52,7 @@ export default function ClickableWords({
       ...prev,
       [index]: { translation: null, loading: true },
     }));
-    setActiveIndex(index);
 
-    // Only charge for first lookup of this word
     if (!lookedUpIndices.has(index)) {
       setLookedUpIndices((prev) => new Set(prev).add(index));
       onLookup();
@@ -90,27 +85,39 @@ export default function ClickableWords({
     <span className="leading-relaxed">
       {words.map((word, i) => {
         const state = wordStates[i];
-        const isActive = activeIndex === i;
         const isTarget = isTargetWord(word);
+        const isLookedUp = !!state?.translation;
+        const isLoading = !!state?.loading;
+        const showPopover =
+          !isTarget &&
+          hoveredIndex === i &&
+          (isLoading || isLookedUp);
 
         return (
-          <span key={i} className="relative inline">
+          <span
+            key={i}
+            className="relative inline"
+            onMouseEnter={() => setHoveredIndex(i)}
+            onMouseLeave={() => setHoveredIndex(null)}
+          >
             <span
               onClick={() => handleWordClick(i)}
               className={
                 isTarget
                   ? "font-bold"
-                  : `cursor-pointer border-b border-dashed border-gray-300 hover:border-indigo-400 hover:text-indigo-600 transition-colors ${
-                      disabled ? "cursor-default opacity-60" : ""
-                    }`
+                  : isLookedUp
+                    ? "text-indigo-500 transition-colors"
+                    : `cursor-pointer border-b border-dashed border-gray-300 hover:border-indigo-400 hover:text-indigo-600 transition-colors ${
+                        disabled ? "cursor-default opacity-60" : ""
+                      }`
               }
             >
               {word}
             </span>
 
-            {isActive && state && !isTarget && (
+            {showPopover && (
               <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-20 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap shadow-lg">
-                {state.loading ? "..." : state.translation}
+                {isLoading ? "..." : state.translation}
               </span>
             )}
 
