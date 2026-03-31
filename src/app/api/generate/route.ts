@@ -22,8 +22,8 @@ export async function POST(request: NextRequest) {
           role: "user",
           content: `You are a Bulgarian language teaching assistant helping an A1-A2 beginner. Given the English word "${word}", provide:
 
-1. The most common, basic Bulgarian translation (in Cyrillic). Always prefer the simplest, most frequently used form of the word — the one a beginner would learn first. For example: "where" → "къде" (not "където"), "that" → "това" (not "който"), "what" → "какво" (not "което").
-2. A simple, natural Bulgarian sentence using this exact word form (in Cyrillic). Questions are great for question words (къде, какво, кога, etc.). Keep it short (5-8 words), using only basic A1-A2 vocabulary.
+1. The most common, basic Bulgarian translation (in Cyrillic). Always prefer the simplest, most direct form — the one a beginner would learn first. Use interrogative forms over relative forms, base forms over derived forms, and standalone forms over compound forms.
+2. A simple, natural Bulgarian sentence using this exact word form (in Cyrillic). Prefer questions for interrogative words. Keep it short (5-8 words), using only basic A1-A2 vocabulary.
 3. The English translation of that sentence.
 4. A semantic topic category for this word (one of: приветствия/greetings, семейство/family, храна/food, цветове/colors, числа/numbers, дрехи/clothing, тяло/body, дом/home, спалня/bedroom, кухня/kitchen, баня/bathroom, животни/animals, природа/nature, време/weather, професии/professions, транспорт/transport, училище/school, емоции/emotions, действия/actions, време-часове/time, пазаруване/shopping, здраве/health, спорт/sport, технологии/technology, друго/other)
 
