@@ -7,6 +7,7 @@ import { loadCards, addCard, updateCard, loadStats, addToScore } from "@/lib/sto
 import AddCard from "@/components/AddCard";
 import ReviewSession from "@/components/ReviewSession";
 import TopicBrowser from "@/components/TopicBrowser";
+import { signOutAction } from "./actions";
 
 type Tab = "add" | "review" | "topics";
 
@@ -71,12 +72,14 @@ export default function Home() {
             <span className="text-sm font-semibold text-indigo-600">
               {totalScore.toLocaleString()} pts
             </span>
-            <a
-              href="/api/auth/signout"
-              className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              Sign out
-            </a>
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         </div>
       </header>
