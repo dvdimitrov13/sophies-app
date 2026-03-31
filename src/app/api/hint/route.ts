@@ -5,8 +5,10 @@ const client = new Anthropic();
 
 export async function POST(request: NextRequest) {
   try {
-    const { userAttempt, correctSentence, englishSentence, englishWord } =
+    const { userAttempt, correctSentence, englishSentence, englishWord, direction } =
       await request.json();
+
+    const isEnToBg = direction !== "bg-to-en";
 
     if (!userAttempt || !correctSentence) {
       return NextResponse.json(
@@ -23,8 +25,8 @@ export async function POST(request: NextRequest) {
           role: "user",
           content: `You are a friendly Bulgarian language tutor helping a beginner student.
 
-The student tried to translate this English sentence into Bulgarian:
-English: "${englishSentence}" (key word: "${englishWord}")
+The student tried to translate this ${isEnToBg ? "English sentence into Bulgarian" : "Bulgarian sentence into English"}:
+${isEnToBg ? "English" : "Bulgarian"}: "${englishSentence}" (key word: "${englishWord}")
 
 Their attempt: "${userAttempt}"
 The correct sentence: "${correctSentence}"

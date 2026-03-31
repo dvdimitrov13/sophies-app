@@ -1,4 +1,4 @@
-import { Flashcard } from "./types";
+import { Flashcard, ReviewDirection } from "./types";
 
 /**
  * SM-2 spaced repetition algorithm.
@@ -50,6 +50,12 @@ export function getCardsForReview(cards: Flashcard[]): Flashcard[] {
   return cards
     .filter((c) => c.nextReviewDate <= now)
     .sort((a, b) => a.nextReviewDate - b.nextReviewDate);
+}
+
+export function chooseDirection(card: Flashcard): ReviewDirection {
+  // Higher ease = easier card = more likely to get the hard direction (en-to-bg)
+  const prob = Math.min(0.85, Math.max(0.3, (card.easeFactor - 1.3) / 2.0));
+  return Math.random() < prob ? "en-to-bg" : "bg-to-en";
 }
 
 export function createCard(

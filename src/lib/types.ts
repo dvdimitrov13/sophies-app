@@ -21,7 +21,15 @@ export interface ReviewResult {
 
 export type Topic = string;
 
-export interface AppState {
-  cards: Flashcard[];
-  topics: Topic[];
+export type ReviewDirection = "en-to-bg" | "bg-to-en";
+
+export interface CardScore {
+  basePoints: number;
+  lookupPenalty: number;
+  totalPoints: number;
+  direction: ReviewDirection;
+}
+
+export interface UserStats {
+  totalScore: number;
 }

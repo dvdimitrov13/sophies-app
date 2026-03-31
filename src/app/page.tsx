@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Flashcard } from "@/lib/types";
 import { getCardsForReview } from "@/lib/spaced-repetition";
-import { loadCards, addCard, updateCard } from "@/lib/storage";
+import { loadCards, addCard, updateCard, loadStats, addToScore } from "@/lib/storage";
 import AddCard from "@/components/AddCard";
 import ReviewSession from "@/components/ReviewSession";
 import TopicBrowser from "@/components/TopicBrowser";
@@ -14,10 +14,12 @@ export default function Home() {
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("add");
   const [loaded, setLoaded] = useState(false);
+  const [totalScore, setTotalScore] = useState(0);
 
   useEffect(() => {
-    loadCards().then((c) => {
+    Promise.all([loadCards(), loadStats()]).then(([c, stats]) => {
       setCards(c);
+      setTotalScore(stats.totalScore);
       setLoaded(true);
     });
   }, []);
@@ -34,6 +36,13 @@ export default function Home() {
       prev.map((c) => (c.id === updated.id ? updated : c))
     );
     await updateCard(updated);
+  }, []);
+
+  const handleSessionComplete = useCallback(async (points: number) => {
+    if (points > 0) {
+      const result = await addToScore(points);
+      setTotalScore(result.totalScore);
+    }
   }, []);
 
   const dueCount = loaded ? getCardsForReview(cards).length : 0;
@@ -58,12 +67,17 @@ export default function Home() {
               {cards.length} cards &middot; {dueCount} due for review
             </p>
           </div>
-          <a
-            href="/api/auth/signout"
-            className="text-sm text-gray-400 hover:text-gray-600 transition-colors mt-1"
-          >
-            Sign out
-          </a>
+          <div className="flex items-center gap-4 mt-1">
+            <span className="text-sm font-semibold text-indigo-600">
+              {totalScore.toLocaleString()} pts
+            </span>
+            <a
+              href="/api/auth/signout"
+              className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Sign out
+            </a>
+          </div>
         </div>
       </header>
 
@@ -99,7 +113,7 @@ export default function Home() {
           <AddCard cards={cards} onAdd={handleAddCard} />
         )}
         {activeTab === "review" && (
-          <ReviewSession cards={cards} onUpdateCard={handleUpdateCard} />
+          <ReviewSession cards={cards} onUpdateCard={handleUpdateCard} onSessionComplete={handleSessionComplete} />
         )}
         {activeTab === "topics" && <TopicBrowser cards={cards} />}
       </main>

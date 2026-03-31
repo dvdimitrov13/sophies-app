@@ -27,6 +27,24 @@ export async function updateCard(card: Flashcard): Promise<void> {
   });
 }
 
+export async function loadStats(): Promise<{ totalScore: number }> {
+  const res = await fetch("/api/stats");
+  if (!res.ok) return { totalScore: 0 };
+  return res.json();
+}
+
+export async function addToScore(
+  points: number
+): Promise<{ totalScore: number }> {
+  const res = await fetch("/api/stats", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ addPoints: points }),
+  });
+  if (!res.ok) return { totalScore: 0 };
+  return res.json();
+}
+
 export function isDuplicate(cards: Flashcard[], englishWord: string): boolean {
   const normalized = englishWord.toLowerCase().trim();
   return cards.some((c) => c.englishWord === normalized);

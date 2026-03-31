@@ -1,20 +1,34 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Flashcard } from "@/lib/types";
-import { getCardsForReview, reviewCard } from "@/lib/spaced-repetition";
+import { Flashcard, ReviewDirection, CardScore } from "@/lib/types";
+import {
+  getCardsForReview,
+  reviewCard,
+  chooseDirection,
+} from "@/lib/spaced-repetition";
+import { calculateCardScore, scoreToQuality } from "@/lib/scoring";
+import ClickableWords from "./ClickableWords";
 
 type Phase = "answering" | "hint" | "retrying" | "result";
 
 interface Props {
   cards: Flashcard[];
   onUpdateCard: (card: Flashcard) => void;
+  onSessionComplete: (points: number) => void;
 }
 
-export default function ReviewSession({ cards, onUpdateCard }: Props) {
+export default function ReviewSession({
+  cards,
+  onUpdateCard,
+  onSessionComplete,
+}: Props) {
   const snapshotRef = useRef<Flashcard[] | null>(null);
+  const directionsRef = useRef<ReviewDirection[]>([]);
   if (snapshotRef.current === null) {
-    snapshotRef.current = getCardsForReview(cards);
+    const due = getCardsForReview(cards);
+    snapshotRef.current = due;
+    directionsRef.current = due.map((c) => chooseDirection(c));
   }
   const dueCards = snapshotRef.current;
 
@@ -23,10 +37,15 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
   const [phase, setPhase] = useState<Phase>("answering");
   const [hint, setHint] = useState("");
   const [hintLoading, setHintLoading] = useState(false);
+  const [usedHint, setUsedHint] = useState(false);
   const [firstAttempt, setFirstAttempt] = useState("");
   const [sessionDone, setSessionDone] = useState(false);
   const [finalCorrect, setFinalCorrect] = useState(false);
   const [gotItSecondTry, setGotItSecondTry] = useState(false);
+  const [wordLookups, setWordLookups] = useState(0);
+  const [lastCardScore, setLastCardScore] = useState<CardScore | null>(null);
+  const [sessionPoints, setSessionPoints] = useState(0);
+  const [cardScores, setCardScores] = useState<CardScore[]>([]);
   const [score, setScore] = useState({ correct: 0, incorrect: 0 });
 
   if (dueCards.length === 0 && !sessionDone) {
@@ -46,6 +65,9 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
       <div className="max-w-lg mx-auto text-center py-12">
         <div className="text-6xl mb-4">✅</div>
         <h2 className="text-2xl font-bold mb-2">Session Complete!</h2>
+        <div className="text-4xl font-bold text-indigo-600 mt-4">
+          {sessionPoints} pts
+        </div>
         <div className="flex justify-center gap-8 mt-6">
           <div className="text-center">
             <div className="text-3xl font-bold text-green-600">
@@ -60,11 +82,32 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
             <div className="text-sm text-gray-500">Needs practice</div>
           </div>
         </div>
+        {cardScores.length > 0 && (
+          <div className="mt-6 space-y-1 text-sm text-gray-500">
+            {cardScores.map((cs, i) => (
+              <div key={i} className="flex justify-between max-w-xs mx-auto">
+                <span>
+                  {dueCards[i]?.englishWord}{" "}
+                  <span className="text-xs text-gray-400">
+                    {cs.direction === "en-to-bg" ? "EN→BG" : "BG→EN"}
+                  </span>
+                </span>
+                <span className="font-medium text-gray-700">
+                  {cs.totalPoints} pts
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <button
           onClick={() => {
             setCurrentIndex(0);
             setSessionDone(false);
             setScore({ correct: 0, incorrect: 0 });
+            setSessionPoints(0);
+            setCardScores([]);
+            snapshotRef.current = null;
+            directionsRef.current = [];
           }}
           className="mt-8 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
         >
@@ -75,6 +118,20 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
   }
 
   const card = dueCards[currentIndex];
+  const direction = directionsRef.current[currentIndex];
+  const isEnToBg = direction === "en-to-bg";
+
+  // Direction-dependent fields
+  const promptWord = isEnToBg ? card.englishWord : card.bulgarianWord;
+  const promptSentence = isEnToBg
+    ? card.englishSentence
+    : card.bulgarianSentence;
+  const expectedAnswer = isEnToBg
+    ? card.bulgarianSentence
+    : card.englishSentence;
+  const promptLang = isEnToBg ? "English" : "Български";
+  const targetLang = isEnToBg ? "Bulgarian" : "English";
+  const sentenceLang: "bg" | "en" = isEnToBg ? "en" : "bg";
 
   function normalize(str: string): string {
     return str
@@ -84,15 +141,39 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
       .trim();
   }
 
+  function finishCard(
+    firstTryCorrect: boolean,
+    secondTryCorrect: boolean
+  ) {
+    const cardScore = calculateCardScore(
+      firstTryCorrect,
+      secondTryCorrect,
+      usedHint,
+      wordLookups,
+      direction
+    );
+    const quality = scoreToQuality(cardScore);
+    const updated = reviewCard(card, quality);
+    onUpdateCard(updated);
+
+    setLastCardScore(cardScore);
+    setSessionPoints((prev) => prev + cardScore.totalPoints);
+    setCardScores((prev) => [...prev, cardScore]);
+
+    const isCorrect = firstTryCorrect || secondTryCorrect;
+    setScore((prev) => ({
+      correct: prev.correct + (isCorrect ? 1 : 0),
+      incorrect: prev.incorrect + (isCorrect ? 0 : 1),
+    }));
+  }
+
   function handleFirstCheck() {
-    const correct = normalize(userInput) === normalize(card.bulgarianSentence);
+    const correct = normalize(userInput) === normalize(expectedAnswer);
     if (correct) {
       setFinalCorrect(true);
       setGotItSecondTry(false);
       setPhase("result");
-      const updated = reviewCard(card, 5);
-      onUpdateCard(updated);
-      setScore((prev) => ({ ...prev, correct: prev.correct + 1 }));
+      finishCard(true, false);
     } else {
       setFirstAttempt(userInput);
       setPhase("hint");
@@ -101,19 +182,26 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
 
   async function handleGetHint() {
     setHintLoading(true);
+    setUsedHint(true);
     try {
       const res = await fetch("/api/hint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userAttempt: firstAttempt,
-          correctSentence: card.bulgarianSentence,
-          englishSentence: card.englishSentence,
-          englishWord: card.englishWord,
+          correctSentence: expectedAnswer,
+          englishSentence: isEnToBg
+            ? card.englishSentence
+            : card.bulgarianSentence,
+          englishWord: isEnToBg ? card.englishWord : card.bulgarianWord,
+          direction,
         }),
       });
       const data = await res.json();
-      setHint(data.hint || "Try thinking about each word in the sentence one at a time.");
+      setHint(
+        data.hint ||
+          "Try thinking about each word in the sentence one at a time."
+      );
     } catch {
       setHint("Try thinking about each word in the sentence one at a time.");
     } finally {
@@ -129,20 +217,15 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
   }
 
   function handleSecondCheck() {
-    const correct = normalize(userInput) === normalize(card.bulgarianSentence);
+    const correct = normalize(userInput) === normalize(expectedAnswer);
     if (correct) {
       setFinalCorrect(true);
       setGotItSecondTry(true);
-      const updated = reviewCard(card, 3);
-      onUpdateCard(updated);
-      setScore((prev) => ({ ...prev, correct: prev.correct + 1 }));
     } else {
       setFinalCorrect(false);
       setGotItSecondTry(false);
-      const updated = reviewCard(card, 0);
-      onUpdateCard(updated);
-      setScore((prev) => ({ ...prev, incorrect: prev.incorrect + 1 }));
     }
+    finishCard(false, correct);
     setPhase("result");
   }
 
@@ -150,11 +233,15 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
     setPhase("answering");
     setUserInput("");
     setHint("");
+    setUsedHint(false);
     setFirstAttempt("");
     setFinalCorrect(false);
     setGotItSecondTry(false);
+    setWordLookups(0);
+    setLastCardScore(null);
     if (currentIndex + 1 >= dueCards.length) {
       setSessionDone(true);
+      onSessionComplete(sessionPoints);
     } else {
       setCurrentIndex((i) => i + 1);
     }
@@ -164,27 +251,57 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
     <div className="max-w-lg mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Review</h2>
-        <span className="text-sm text-gray-500">
-          {currentIndex + 1} / {dueCards.length}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-indigo-600">
+            {sessionPoints} pts
+          </span>
+          <span className="text-sm text-gray-500">
+            {currentIndex + 1} / {dueCards.length}
+          </span>
+        </div>
       </div>
 
       <div className="p-6 bg-white rounded-2xl border-2 border-gray-100 shadow-sm space-y-4">
-        {/* Card prompt — always visible */}
+        {/* Direction badge + prompt */}
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              isEnToBg
+                ? "bg-purple-100 text-purple-700"
+                : "bg-teal-100 text-teal-700"
+            }`}
+          >
+            {isEnToBg ? "EN → BG" : "BG → EN"}
+          </span>
+          {wordLookups > 0 && (
+            <span className="text-xs text-orange-500">
+              -{wordLookups * 10} pts (lookups)
+            </span>
+          )}
+        </div>
+
         <div>
           <span className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            English
+            {promptLang}
           </span>
           <p className="text-xl font-semibold text-gray-900 mt-1">
-            {card.englishWord}
+            {promptWord}
           </p>
         </div>
         <div>
           <span className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            Translate this sentence
+            Translate this sentence to {targetLang}
           </span>
-          <p className="text-lg text-indigo-700 font-medium mt-1">
-            {card.englishSentence}
+          <div className="text-lg text-indigo-700 font-medium mt-1">
+            <ClickableWords
+              sentence={promptSentence}
+              fromLanguage={sentenceLang}
+              onLookup={() => setWordLookups((n) => n + 1)}
+              disabled={phase === "result"}
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Tap a word for its translation (-10 pts each)
           </p>
         </div>
 
@@ -200,7 +317,7 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
                   if (userInput.trim()) handleFirstCheck();
                 }
               }}
-              placeholder="Type the full Bulgarian sentence..."
+              placeholder={`Type the full ${targetLang} sentence...`}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-lg resize-none bg-white text-gray-900"
               rows={2}
               autoFocus
@@ -215,7 +332,7 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
           </>
         )}
 
-        {/* Phase: hint — first attempt was wrong */}
+        {/* Phase: hint */}
         {phase === "hint" && (
           <div className="space-y-4">
             <div className="-mx-6 -mt-2 px-6 py-4 text-center bg-amber-50 rounded-none">
@@ -245,7 +362,7 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
           </div>
         )}
 
-        {/* Phase: retrying — second attempt with optional hint */}
+        {/* Phase: retrying */}
         {phase === "retrying" && (
           <div className="space-y-4">
             <div className="-mx-6 -mt-2 px-6 py-4 text-center bg-amber-50 rounded-none">
@@ -285,7 +402,7 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
           </div>
         )}
 
-        {/* Phase: result — final outcome */}
+        {/* Phase: result */}
         {phase === "result" && (
           <div className="space-y-4">
             <div
@@ -304,6 +421,17 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
                     : "Nice work!"
                   : "Keep practicing!"}
               </p>
+              {lastCardScore && (
+                <p
+                  className={`text-sm mt-1 font-medium ${
+                    finalCorrect ? "text-green-600" : "text-blue-600"
+                  }`}
+                >
+                  +{lastCardScore.totalPoints} pts
+                  {lastCardScore.lookupPenalty > 0 &&
+                    ` (−${lastCardScore.lookupPenalty} from lookups)`}
+                </p>
+              )}
             </div>
 
             {!finalCorrect && (
@@ -319,7 +447,7 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
                     Correct answer
                   </p>
                   <p className="text-lg font-semibold text-green-700">
-                    {card.bulgarianSentence}
+                    {expectedAnswer}
                   </p>
                 </div>
               </div>
@@ -331,7 +459,7 @@ export default function ReviewSession({ cards, onUpdateCard }: Props) {
                   The sentence
                 </p>
                 <p className="text-lg font-semibold text-green-700">
-                  {card.bulgarianSentence}
+                  {expectedAnswer}
                 </p>
               </div>
             )}
