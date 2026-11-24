@@ -4,8 +4,6 @@ import bcrypt from "bcryptjs";
 
 const VALID_USER = {
   email: "sophie@coolness.com",
-  // bcrypt hash of "sophiescool"
-  passwordHash: "$2b$10$yveGtXAxwq2zVXqt47VzSubPzxlX2OlXCbQWg5cvDrs7aIJz4TDKO",
   name: "Sophie",
 };
 
@@ -23,7 +21,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!email || !password) return null;
         if (email.toLowerCase() !== VALID_USER.email) return null;
 
-        const valid = await bcrypt.compare(password, VALID_USER.passwordHash);
+        // bcrypt hash of the password, set as an app setting (never committed)
+        const passwordHash = process.env.SOPHIE_PASSWORD_HASH;
+        if (!passwordHash) return null;
+
+        const valid = await bcrypt.compare(password, passwordHash);
         if (!valid) return null;
 
         return {
