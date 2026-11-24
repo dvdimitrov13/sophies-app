@@ -1,5 +1,19 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Secrets and deployment
+
+All secrets live in the Azure Key Vault `sophies-app-kv`; the live app reads them
+through its managed identity. To run locally, sign in once and pull them into
+`.env.local` (gitignored):
+
+```bash
+az login
+./scripts/pull-secrets.sh
+```
+
+Every push to `main` builds and deploys to the Azure Web App `sophies-bulgarian`
+via GitHub Actions (`.github/workflows/deploy.yml`).
+
 ## Getting Started
 
 First, run the development server:
