@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Flashcard, ReviewDirection, CardScore, DirectionPref } from "@/lib/types";
 import { reviewCard, chooseDirection } from "@/lib/spaced-repetition";
 import { calculateCardScore, scoreToGrade } from "@/lib/scoring";
 import ClickableWords from "./ClickableWords";
+import BulgarianKeys from "./BulgarianKeys";
 
 type Phase = "answering" | "hint" | "retrying" | "result";
 
@@ -48,7 +49,7 @@ function DirectionSwitch({
   onChange: (pref: DirectionPref) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label="Question direction" className="flex rounded-full bg-black/[0.05] p-0.5 text-xs">
+    <div role="radiogroup" aria-label="Question direction" className="flex rounded-full bg-ink/[0.05] p-0.5 text-xs">
       {DIRECTION_OPTIONS.map((o) => (
         <button
           key={o.value}
@@ -56,8 +57,8 @@ function DirectionSwitch({
           aria-checked={value === o.value}
           title={o.title}
           onClick={() => onChange(o.value)}
-          className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
-            value === o.value ? "bg-ink text-lime-300" : "text-muted hover:text-ink"
+          className={`rounded-full px-3 py-1.5 font-semibold transition-colors sm:px-2.5 sm:py-1 ${
+            value === o.value ? "bg-night text-lime-300" : "text-muted hover:text-ink"
           }`}
         >
           {o.label}
@@ -111,6 +112,7 @@ export default function ReviewSession({
   // Once you start on a card its direction stays put; a new setting applies
   // from the next card.
   const [lockedDirection, setLockedDirection] = useState<ReviewDirection | null>(null);
+  const answerRef = useRef<HTMLTextAreaElement>(null);
 
   const sessionPoints = answers.reduce((n, a) => n + a.score.totalPoints, 0);
 
@@ -124,7 +126,7 @@ export default function ReviewSession({
     return (
       <div className="mx-auto max-w-lg">
         <div className="surface overflow-hidden">
-          <div className="bg-ink px-6 pt-8 pb-7 text-center text-white">
+          <div className="bg-night px-6 pt-8 pb-7 text-center text-white">
             <p className="eyebrow text-lime-300/80">
               {mode === "test" ? "Test complete" : "Session complete"}
             </p>
@@ -137,9 +139,9 @@ export default function ReviewSession({
                 : "points earned"}
             </p>
           </div>
-          <div className="grid grid-cols-2 divide-x divide-black/5 border-b border-black/5">
+          <div className="grid grid-cols-2 divide-x divide-ink/5 border-b border-ink/5">
             <div className="py-4 text-center">
-              <div className="text-2xl font-bold text-lime-600">{correct}</div>
+              <div className="text-2xl font-bold text-lime-600 dark:text-lime-400">{correct}</div>
               <div className="text-sm text-muted">Correct</div>
             </div>
             <div className="py-4 text-center">
@@ -149,13 +151,13 @@ export default function ReviewSession({
               <div className="text-sm text-muted">Needs practice</div>
             </div>
           </div>
-          <ul className="max-h-72 divide-y divide-black/5 overflow-y-auto px-6">
+          <ul className="max-h-72 divide-y divide-ink/5 overflow-y-auto px-6">
             {answers.map((a, i) => (
               <li key={i} className="flex items-center justify-between py-2.5 text-sm">
                 <span className="flex items-center gap-2">
                   <span
                     className={`grid size-5 place-items-center rounded-full text-[11px] font-bold ${
-                      a.correct ? "bg-lime-300 text-ink" : "bg-orange-100 text-orange-600"
+                      a.correct ? "bg-lime-300 text-on-lime" : "bg-orange-100 text-orange-600 dark:bg-orange-400/15 dark:text-orange-300"
                     }`}
                   >
                     {a.correct ? "✓" : "✗"}
@@ -291,9 +293,23 @@ export default function ReviewSession({
     }
   }
 
+  /** Types a letter at the cursor (or over the selection) in the answer box. */
+  function insertLetter(letter: string) {
+    const box = answerRef.current;
+    const start = box?.selectionStart ?? userInput.length;
+    const end = box?.selectionEnd ?? userInput.length;
+    lockDirection();
+    setUserInput(userInput.slice(0, start) + letter + userInput.slice(end));
+    requestAnimationFrame(() => {
+      box?.focus();
+      box?.setSelectionRange(start + letter.length, start + letter.length);
+    });
+  }
+
   const answerBox = (onSubmit: () => void, placeholder: string) => (
     <>
       <textarea
+        ref={answerRef}
         value={userInput}
         onChange={(e) => {
           lockDirection();
@@ -310,6 +326,7 @@ export default function ReviewSession({
         rows={2}
         autoFocus
       />
+      {isEnToBg && <BulgarianKeys onInsert={insertLetter} />}
       <button
         onClick={onSubmit}
         disabled={!userInput.trim()}
@@ -330,15 +347,15 @@ export default function ReviewSession({
             <button
               onClick={onExit}
               aria-label="Leave test"
-              className="grid size-9 shrink-0 place-items-center rounded-full bg-black/[0.04] text-lg hover:bg-black/[0.08]"
+              className="grid size-9 shrink-0 place-items-center rounded-full bg-ink/[0.04] text-lg hover:bg-ink/[0.08]"
             >
               ←
             </button>
           )}
-          <h2 className="truncate text-2xl font-bold tracking-tight">{title}</h2>
+          <h2 className="truncate text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="chip bg-lime-300/60 text-ink">{sessionPoints} pts</span>
+          <span className="chip bg-lime-300/60 text-on-lime dark:bg-lime-400/20 dark:text-lime-300">{sessionPoints} pts</span>
           <span className="text-sm font-medium text-muted tabular-nums">
             {currentIndex + 1}/{cards.length}
           </span>
@@ -350,16 +367,16 @@ export default function ReviewSession({
         <DirectionSwitch value={directionPref} onChange={onDirectionChange} />
       </div>
 
-      <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
+      <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
         <div
           className="h-full rounded-full bg-lime-400 transition-all duration-500"
           style={{ width: `${progress * 100}%` }}
         />
       </div>
 
-      <div className="surface space-y-5 p-6">
+      <div className="surface space-y-5 p-5 sm:p-6">
         <div className="flex items-center justify-between">
-          <span className="chip bg-ink text-xs text-lime-300">
+          <span className="chip bg-night text-xs text-lime-300">
             {isEnToBg ? "EN → BG" : "BG → EN"}
           </span>
           <span className="flex items-center gap-2">
@@ -368,7 +385,7 @@ export default function ReviewSession({
                 −{wordLookups * 10} pts
               </span>
             )}
-            <span className="chip bg-black/[0.04] text-xs text-ink-soft">{card.topic}</span>
+            <span className="chip bg-ink/[0.04] text-xs text-ink-soft">{card.topic}</span>
           </span>
         </div>
 
@@ -400,8 +417,8 @@ export default function ReviewSession({
 
         {phase === "hint" && (
           <div className="space-y-4">
-            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center">
-              <p className="text-lg font-bold text-amber-700">Almost there!</p>
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 dark:bg-amber-400/10 text-center">
+              <p className="text-lg font-bold text-amber-700 dark:text-amber-300">Almost there!</p>
             </div>
             <div>
               <p className="eyebrow mb-1">Your attempt</p>
@@ -411,7 +428,7 @@ export default function ReviewSession({
               <button
                 onClick={handleGetHint}
                 disabled={hintLoading}
-                className="btn flex-1 bg-amber-400 text-ink hover:bg-amber-300"
+                className="btn flex-1 bg-amber-400 text-on-lime hover:bg-amber-300"
               >
                 {hintLoading ? "Thinking…" : "Get a hint"}
               </button>
@@ -425,13 +442,13 @@ export default function ReviewSession({
         {phase === "retrying" && (
           <div className="space-y-4">
             {hint ? (
-              <div className="rounded-2xl border border-lime-200 bg-lime-50 p-4">
-                <p className="eyebrow mb-1 text-lime-700">Hint</p>
+              <div className="rounded-2xl border border-lime-200 bg-lime-50 dark:border-lime-400/20 dark:bg-lime-400/10 p-4">
+                <p className="eyebrow mb-1 text-lime-700 dark:text-lime-300">Hint</p>
                 <p className="text-ink-soft">{hint}</p>
               </div>
             ) : (
-              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center">
-                <p className="text-lg font-bold text-amber-700">Give it another shot!</p>
+              <div className="rounded-2xl bg-amber-50 px-4 py-3 dark:bg-amber-400/10 text-center">
+                <p className="text-lg font-bold text-amber-700 dark:text-amber-300">Give it another shot!</p>
               </div>
             )}
             {answerBox(handleSecondCheck, "Try again…")}
@@ -442,10 +459,10 @@ export default function ReviewSession({
           <div className="space-y-4">
             <div
               className={`rounded-2xl px-4 py-4 text-center ${
-                finalCorrect ? "bg-lime-300" : "bg-orange-50"
+                finalCorrect ? "bg-lime-300" : "bg-orange-50 dark:bg-orange-400/10"
               }`}
             >
-              <p className={`text-xl font-bold ${finalCorrect ? "text-ink" : "text-orange-700"}`}>
+              <p className={`text-xl font-bold ${finalCorrect ? "text-on-lime" : "text-orange-700 dark:text-orange-300"}`}>
                 {finalCorrect
                   ? gotItSecondTry
                     ? "Got it on the second try!"
@@ -455,7 +472,7 @@ export default function ReviewSession({
               {lastCardScore && (
                 <p
                   className={`mt-0.5 text-sm font-semibold ${
-                    finalCorrect ? "text-ink/70" : "text-orange-600"
+                    finalCorrect ? "text-on-lime/70" : "text-orange-600 dark:text-orange-300"
                   }`}
                 >
                   +{lastCardScore.totalPoints} pts
@@ -475,7 +492,7 @@ export default function ReviewSession({
                 </div>
                 <div>
                   <p className="eyebrow mb-1">Correct answer</p>
-                  <p className="text-lg font-semibold text-lime-700">{expectedAnswer}</p>
+                  <p className="text-lg font-semibold text-lime-700 dark:text-lime-300">{expectedAnswer}</p>
                 </div>
               </div>
             )}
@@ -483,7 +500,7 @@ export default function ReviewSession({
             {finalCorrect && gotItSecondTry && (
               <div>
                 <p className="eyebrow mb-1">The sentence</p>
-                <p className="text-lg font-semibold text-lime-700">{expectedAnswer}</p>
+                <p className="text-lg font-semibold text-lime-700 dark:text-lime-300">{expectedAnswer}</p>
               </div>
             )}
 

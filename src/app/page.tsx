@@ -5,8 +5,10 @@ import { DirectionPref, Flashcard, UserStats } from "@/lib/types";
 import { getCardsForReview } from "@/lib/spaced-repetition";
 import {
   loadCards,
-  addCard,
+  loadTopics,
+  saveTopics,
   importCards,
+  addCard,
   updateCard,
   loadStats,
   addToScore,
@@ -14,9 +16,11 @@ import {
   saveDirectionPref,
 } from "@/lib/storage";
 import { liveStreak, localDateKey } from "@/lib/streak";
+import { setCustomTopics, type TopicMeta } from "@/lib/topics";
 import AddCard from "@/components/AddCard";
 import ReviewSession from "@/components/ReviewSession";
 import TopicBrowser from "@/components/TopicBrowser";
+import HeaderMenu from "@/components/HeaderMenu";
 import { signOutAction } from "./actions";
 
 type Tab = "review" | "topics" | "add";
@@ -43,7 +47,8 @@ export default function Home() {
   const recordingStudy = useRef(false);
 
   useEffect(() => {
-    Promise.all([loadCards(), loadStats()]).then(([c, s]) => {
+    Promise.all([loadCards(), loadStats(), loadTopics()]).then(([c, s, t]) => {
+      setCustomTopics(t);
       setCards(c);
       setStats(s);
       setLoaded(true);
@@ -57,9 +62,18 @@ export default function Home() {
     }
   }, []);
 
+
+  // New topics are saved before their cards, so tiles have a name and emoji.
+  const handleSaveTopics = useCallback(async (topics: TopicMeta[]) => {
+    if (topics.length === 0) return;
+    const all = await saveTopics(topics);
+    if (all) setCustomTopics(all);
+  }, []);
+
   const handleImport = useCallback(async (newCards: Flashcard[]) => {
     const { added, error } = await importCards(newCards);
-    if (added.length > 0) setCards((prev) => [...prev, ...added]);
+    // Reload from the server so cards saved before any error show up too.
+    setCards(await loadCards());
     return { added: added.length, error };
   }, []);
 
@@ -109,22 +123,22 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-black/5 bg-canvas/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 pt-4 pb-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-lime-400 text-xl font-black text-ink shadow-[inset_0_-3px_0_rgba(20,23,15,0.15)]">
+      <header className="sticky top-0 z-10 border-b border-ink/5 bg-canvas/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-4 pt-3 pb-3 sm:pt-4">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-lime-400 text-lg font-black text-on-lime shadow-[inset_0_-3px_0_rgba(20,23,15,0.15)] sm:size-11 sm:rounded-2xl sm:text-xl">
               Б
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-lg leading-tight font-bold tracking-tight">
-                Софи&apos;s Bulgarian
+              <h1 className="truncate text-base leading-tight font-bold tracking-tight sm:text-lg">
+                Bulganki
               </h1>
-              <p className="text-sm text-muted">
+              <p className="hidden text-sm text-muted sm:block">
                 {cards.length} {cards.length === 1 ? "card" : "cards"} · {due.length} due
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <span
               title={
                 studiedToday
@@ -133,52 +147,42 @@ export default function Home() {
                     ? `${streak}-day streak. Answer a card today to keep it going.`
                     : "Answer a card to start a streak"
               }
-              className={`chip ${
-                studiedToday ? "bg-ink text-lime-300" : "bg-black/[0.05] text-ink-soft"
+              className={`chip px-2.5 sm:px-3 ${
+                studiedToday ? "bg-night text-lime-300" : "bg-ink/[0.05] text-ink-soft"
               }`}
             >
               <span className={studiedToday ? "" : "opacity-40 grayscale"}>🔥</span>
               {streak}
             </span>
-            <span className="chip bg-lime-300/70 text-ink" title="Total points">
+            <span
+              className="chip px-2.5 whitespace-nowrap bg-lime-300/70 text-on-lime sm:px-3 dark:bg-lime-400/20 dark:text-lime-300"
+              title="Total points"
+            >
               {stats.totalScore.toLocaleString()} pts
             </span>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                title="Sign out"
-                className="grid size-8 place-items-center rounded-full text-muted hover:bg-black/5 hover:text-ink"
-              >
-                <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden>
-                  <path
-                    d="M8 4H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M13 14l4-4-4-4M17 10H8"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="sr-only">Sign out</span>
-              </button>
-            </form>
+            <HeaderMenu
+              cardCount={cards.length}
+              longestStreak={stats.longestStreak}
+              signOutAction={signOutAction}
+            />
           </div>
         </div>
 
         <nav className="mx-auto max-w-2xl px-4 pb-3">
-          <div className="flex rounded-2xl bg-black/[0.05] p-1">
+          <div className="flex rounded-2xl bg-ink/[0.05] p-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold transition-all ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all sm:py-2 ${
                   activeTab === tab.id
-                    ? "bg-white text-ink shadow-sm"
+                    ? "bg-surface text-ink shadow-sm dark:bg-ink/15"
                     : "text-muted hover:text-ink"
                 }`}
               >
                 {tab.label}
                 {!!tab.badge && (
-                  <span className="rounded-full bg-lime-400 px-1.5 text-xs leading-5 font-bold text-ink tabular-nums">
+                  <span className="rounded-full bg-lime-400 px-1.5 text-xs leading-5 font-bold text-on-lime tabular-nums">
                     {tab.badge}
                   </span>
                 )}
@@ -188,7 +192,7 @@ export default function Home() {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto w-full max-w-2xl px-4 pt-5 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:pt-8">
         {activeTab === "review" && (
           <ReviewSession
             key={reviewKey}
@@ -204,7 +208,7 @@ export default function Home() {
             restartLabel="Check for more"
             empty={
               <div className="surface mx-auto max-w-lg px-6 py-12 text-center">
-                <div className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-lime-300 text-3xl">
+                <div className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-lime-300 text-3xl text-on-lime">
                   ✓
                 </div>
                 <h2 className="text-2xl font-bold tracking-tight">All caught up!</h2>
@@ -235,7 +239,12 @@ export default function Home() {
           />
         )}
         {activeTab === "add" && (
-          <AddCard cards={cards} onAdd={handleAddCard} onImport={handleImport} />
+          <AddCard
+            cards={cards}
+            onAdd={handleAddCard}
+            onImport={handleImport}
+            onSaveTopics={handleSaveTopics}
+          />
         )}
       </main>
     </div>

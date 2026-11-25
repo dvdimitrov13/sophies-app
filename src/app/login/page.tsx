@@ -35,11 +35,11 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-lime-400 text-3xl font-black text-ink shadow-[inset_0_-4px_0_rgba(20,23,15,0.15)]">
+          <div className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-lime-400 text-3xl font-black text-on-lime shadow-[inset_0_-4px_0_rgba(20,23,15,0.15)]">
             Б
           </div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Софи&apos;s Bulgarian
+            Bulganki
           </h1>
           <p className="text-muted mt-1">Sign in to keep your streak going</p>
         </div>

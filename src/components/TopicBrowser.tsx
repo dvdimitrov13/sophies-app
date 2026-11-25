@@ -96,7 +96,7 @@ export default function TopicBrowser({
         <div className="mb-3 text-5xl">📚</div>
         <h2 className="text-2xl font-bold tracking-tight">No cards yet</h2>
         <p className="mt-1 text-muted">
-          Add a word or the A1 starter pack to start building your topics.
+          Add some words to start building your topics.
         </p>
       </div>
     );
@@ -113,7 +113,7 @@ export default function TopicBrowser({
         >
           ← All topics
         </button>
-        <div className="mb-5 flex items-end justify-between gap-4">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-4xl">{info.emoji}</p>
             <h2 className="mt-1 text-3xl font-bold tracking-tight">{openTopic}</h2>
@@ -134,12 +134,12 @@ export default function TopicBrowser({
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-lg">
                     <span className="font-bold">{card.bulgarianWord}</span>
-                    <span className="mx-2 text-black/25">·</span>
+                    <span className="mx-2 text-ink/25">·</span>
                     <span className="text-ink-soft">{card.englishWord}</span>
                   </p>
                   <span
                     className={`chip shrink-0 text-xs ${
-                      isDue ? "bg-amber-100 text-amber-800" : "bg-lime-200/70 text-lime-900"
+                      isDue ? "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300" : "bg-lime-200/70 text-lime-900 dark:bg-lime-400/15 dark:text-lime-300"
                     }`}
                   >
                     {formatDue(card, now)}
@@ -175,7 +175,7 @@ export default function TopicBrowser({
   }
 
   return (
-    <div className="mx-auto max-w-2xl pb-28">
+    <div className="mx-auto max-w-2xl pb-36 sm:pb-28">
       <div className="mb-5">
         <h2 className="text-3xl font-bold tracking-tight">Topics</h2>
         <p className="text-muted">
@@ -203,7 +203,7 @@ export default function TopicBrowser({
                   toggle(topic);
                 }
               }}
-              className={`group relative cursor-pointer rounded-3xl border-2 bg-white p-4 text-left transition-all hover:-translate-y-0.5 ${
+              className={`group relative cursor-pointer rounded-3xl border-2 bg-surface p-4 text-left transition-all hover:-translate-y-0.5 ${
                 isSelected
                   ? "border-lime-400 shadow-[0_0_0_4px_rgba(190,242,100,0.45)]"
                   : "border-transparent shadow-[0_1px_2px_rgba(20,23,15,0.04),0_12px_32px_-16px_rgba(20,23,15,0.18)]"
@@ -211,7 +211,7 @@ export default function TopicBrowser({
             >
               <span
                 className={`absolute top-3 right-3 grid size-6 place-items-center rounded-full text-xs font-bold transition-colors ${
-                  isSelected ? "bg-lime-400 text-ink" : "border-2 border-black/10 text-transparent"
+                  isSelected ? "bg-lime-400 text-on-lime" : "border-2 border-ink/10 text-transparent"
                 }`}
               >
                 ✓
@@ -219,7 +219,7 @@ export default function TopicBrowser({
               <p className="text-2xl">{info.emoji}</p>
               <p className="mt-2 font-bold leading-tight">{topic}</p>
               <p className="text-xs text-muted">{info.english ?? " "}</p>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
                 <div
                   className="h-full rounded-full bg-lime-400"
                   style={{ width: `${(learned / topicCards.length) * 100}%` }}
@@ -236,7 +236,7 @@ export default function TopicBrowser({
                   e.stopPropagation();
                   setOpenTopic(topic);
                 }}
-                className="mt-3 text-xs font-semibold text-ink-soft underline decoration-black/20 underline-offset-4 hover:decoration-ink"
+                className="mt-3 text-xs font-semibold text-ink-soft underline decoration-ink/20 underline-offset-4 hover:decoration-ink"
               >
                 See words
               </button>
@@ -246,8 +246,8 @@ export default function TopicBrowser({
       </div>
 
       {selectedList.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 px-4 pb-4">
-          <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-3 rounded-3xl bg-ink p-3 pl-5 text-white shadow-2xl">
+        <div className="fixed inset-x-0 bottom-0 z-20 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4 sm:pb-4">
+          <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-3 rounded-3xl bg-night p-3 pl-5 text-white shadow-2xl">
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold">
                 {selectedList.length === 1 ? selectedList[0] : `${selectedList.length} topics`}
@@ -260,14 +260,14 @@ export default function TopicBrowser({
                   key={n}
                   onClick={() => setLength(n)}
                   className={`rounded-full px-3 py-1 font-semibold transition-colors ${
-                    length === n ? "bg-lime-300 text-ink" : "text-white/70 hover:text-white"
+                    length === n ? "bg-lime-300 text-on-lime" : "text-white/70 hover:text-white"
                   }`}
                 >
                   {n === 0 ? "All" : n}
                 </button>
               ))}
             </div>
-            <button onClick={() => startTest(selectedList)} className="btn-primary py-2.5">
+            <button onClick={() => startTest(selectedList)} className="btn-primary w-full py-2.5 sm:w-auto">
               Start test · {questionCount}
             </button>
           </div>

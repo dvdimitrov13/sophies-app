@@ -106,8 +106,8 @@ export default function ClickableWords({
                 isTarget
                   ? "font-bold underline decoration-lime-400 decoration-4 underline-offset-4"
                   : isLookedUp
-                    ? "bg-lime-200/70 hover:bg-lime-300 rounded-md px-0.5 -mx-0.5 transition-colors"
-                    : `cursor-pointer border-b-2 border-dotted border-black/15 hover:bg-lime-200 hover:rounded-md transition-colors ${
+                    ? "bg-lime-200/70 hover:bg-lime-300 dark:bg-lime-400/20 dark:hover:bg-lime-400/35 rounded-md px-0.5 -mx-0.5 transition-colors"
+                    : `cursor-pointer border-b-2 border-dotted border-ink/15 hover:bg-lime-200 dark:hover:bg-lime-400/25 hover:rounded-md transition-colors ${
                         disabled ? "cursor-default opacity-60" : ""
                       }`
               }
@@ -116,7 +116,7 @@ export default function ClickableWords({
             </span>
 
             {showPopover && (
-              <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-20 px-2 py-1 bg-ink text-lime-300 text-xs font-semibold rounded-lg whitespace-nowrap shadow-lg">
+              <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-20 px-2 py-1 bg-night text-lime-300 text-xs font-semibold rounded-lg whitespace-nowrap shadow-lg">
                 {isLoading ? "..." : state.translation}
               </span>
             )}

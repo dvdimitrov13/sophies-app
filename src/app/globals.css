@@ -5,22 +5,53 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@theme {
-  --color-canvas: #f3f5ec;
-  --color-ink: #14170f;
-  --color-ink-soft: #3b4030;
-  --color-muted: #6b7160;
+/* Dark mode is a class on <html>, set from the saved choice or the device. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --canvas: #f3f5ec;
+  --surface: #ffffff;
+  --ink: #14170f;
+  --ink-soft: #3b4030;
+  --muted: #6b7160;
+  --night: #14170f;
+  --night-soft: #2a2f22;
+}
+
+.dark {
+  color-scheme: dark;
+  --canvas: #0e100b;
+  --surface: #191c15;
+  --ink: #eef2e4;
+  --ink-soft: #c5cbb8;
+  --muted: #8f9682;
+  --night: #242920;
+  --night-soft: #30362a;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  /* Always-dark panels (results header, test bar). */
+  --color-night: var(--night);
+  --color-night-soft: var(--night-soft);
+  /* Text on lime stays dark in both themes. */
+  --color-on-lime: #1a2e05;
 }
 
 body {
-  background: var(--color-canvas);
-  color: var(--color-ink);
+  background: var(--canvas);
+  color: var(--ink);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 /* Shared building blocks, so every screen uses the same look. */
 @utility surface {
-  @apply rounded-3xl border border-black/5 bg-white shadow-[0_1px_2px_rgba(20,23,15,0.04),0_12px_32px_-16px_rgba(20,23,15,0.18)];
+  @apply rounded-3xl border border-ink/5 bg-surface shadow-[0_1px_2px_rgba(20,23,15,0.04),0_12px_32px_-16px_rgba(20,23,15,0.18)] dark:shadow-none;
 }
 
 @utility eyebrow {
@@ -32,19 +63,19 @@ body {
 }
 
 @utility btn-primary {
-  @apply btn bg-lime-400 text-ink shadow-[inset_0_-2px_0_rgba(20,23,15,0.12)] hover:bg-lime-300;
+  @apply btn bg-lime-400 text-on-lime shadow-[inset_0_-2px_0_rgba(20,23,15,0.12)] hover:bg-lime-300;
 }
 
 @utility btn-dark {
-  @apply btn bg-ink text-white hover:bg-ink-soft;
+  @apply btn bg-night text-white hover:bg-night-soft;
 }
 
 @utility btn-soft {
-  @apply btn bg-black/[0.04] text-ink hover:bg-black/[0.07];
+  @apply btn bg-ink/[0.05] text-ink hover:bg-ink/[0.09];
 }
 
 @utility field {
-  @apply w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-lg text-ink transition-shadow placeholder:text-black/30 focus:border-lime-500 focus:ring-4 focus:ring-lime-200 focus:outline-none;
+  @apply w-full rounded-2xl border border-ink/10 bg-surface px-4 py-3 text-lg text-ink transition-shadow placeholder:text-ink/30 focus:border-lime-500 focus:ring-4 focus:ring-lime-200 dark:focus:ring-lime-400/25 focus:outline-none;
 }
 
 @utility chip {
