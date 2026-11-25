@@ -37,7 +37,9 @@ Give a short, encouraging hint (2-3 sentences max) that helps them get closer to
 - Give a grammar tip if relevant
 - Reveal individual words they're struggling with, but never the whole sentence
 
-Keep it warm and supportive. Respond in English. Do not include the full correct sentence.`,
+The app already accepts differences in punctuation, capital letters, contractions ("I'm" vs "I am") and British vs American English ("colour"/"color", "mum"/"mom", "flat"/"apartment"), so never mention any of those. Only point out real differences in words or grammar.
+
+Keep it warm and supportive. Respond in British English. Do not include the full correct sentence.`,
         },
       ],
     });

@@ -34,8 +34,10 @@ export async function POST(request: NextRequest) {
 
 1. The most common, basic Bulgarian translation (in Cyrillic). Always prefer the simplest, most direct form — the one a beginner would learn first. Use interrogative forms over relative forms, base forms over derived forms, and standalone forms over compound forms.
 2. A simple, natural Bulgarian sentence using this exact word form (in Cyrillic). Prefer questions for interrogative words. Keep it short (5-8 words), using only basic A1-A2 vocabulary.
-3. The English translation of that sentence.
+3. The English translation of that sentence, in British English (colour, mum, flat, holiday).
 4. A topic for this word, as its Bulgarian name. The learner's current topics are: ${topicList}. Use one of these whenever the word reasonably fits. Only if it clearly belongs to a common theme that none of them covers (for example "guitar" when there is no music topic), create a new topic: a short, lowercase Bulgarian name like the existing ones, and fill in newTopic with its English name and one fitting emoji. Otherwise set newTopic to null.
+
+The learner's name is Sophie (Софи in Bulgarian). Sometimes use her name in the sentence where it fits naturally, e.g. "Софи пие кафе." / "Sophie drinks coffee."
 
 Respond ONLY in this exact JSON format, no markdown:
 {"bulgarianWord": "...", "bulgarianSentence": "...", "englishSentence": "...", "topic": "...", "newTopic": null}

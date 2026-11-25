@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Flashcard, ReviewDirection, CardScore, DirectionPref } from "@/lib/types";
 import { reviewCard, chooseDirection } from "@/lib/spaced-repetition";
 import { calculateCardScore, scoreToGrade } from "@/lib/scoring";
+import { answersMatch } from "@/lib/answer-check";
 import ClickableWords from "./ClickableWords";
 import BulgarianKeys from "./BulgarianKeys";
 
@@ -68,14 +69,6 @@ function DirectionSwitch({
   );
 }
 
-function normalize(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[.,!?;:'"—–\-()]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export default function ReviewSession({
   queue,
   mode,
@@ -106,6 +99,7 @@ export default function ReviewSession({
   const [sessionDone, setSessionDone] = useState(false);
   const [finalCorrect, setFinalCorrect] = useState(false);
   const [gotItSecondTry, setGotItSecondTry] = useState(false);
+  const [gaveUp, setGaveUp] = useState(false);
   const [wordLookups, setWordLookups] = useState(0);
   const [lastCardScore, setLastCardScore] = useState<CardScore | null>(null);
   const [answers, setAnswers] = useState<Answer[]>([]);
@@ -224,7 +218,7 @@ export default function ReviewSession({
   }
 
   function handleFirstCheck() {
-    if (normalize(userInput) === normalize(expectedAnswer)) {
+    if (answersMatch(userInput, expectedAnswer)) {
       setFinalCorrect(true);
       setGotItSecondTry(false);
       setPhase("result");
@@ -267,15 +261,26 @@ export default function ReviewSession({
   }
 
   function handleSecondCheck() {
-    const correct = normalize(userInput) === normalize(expectedAnswer);
+    const correct = answersMatch(userInput, expectedAnswer);
     setFinalCorrect(correct);
     setGotItSecondTry(correct);
     finishCard(false, correct);
     setPhase("result");
   }
 
+  /** "I don't know": show the answer and count it as a miss (Anki's "Again"). */
+  function handleDontKnow() {
+    lockDirection();
+    setGaveUp(true);
+    setFinalCorrect(false);
+    setGotItSecondTry(false);
+    finishCard(false, false);
+    setPhase("result");
+  }
+
   function handleNext() {
     setPhase("answering");
+    setGaveUp(false);
     setUserInput("");
     setHint("");
     setUsedHint(false);
@@ -306,7 +311,7 @@ export default function ReviewSession({
     });
   }
 
-  const answerBox = (onSubmit: () => void, placeholder: string) => (
+  const answerBox = (onSubmit: () => void, placeholder: string, giveUpLabel: string) => (
     <>
       <textarea
         ref={answerRef}
@@ -327,13 +332,18 @@ export default function ReviewSession({
         autoFocus
       />
       {isEnToBg && <BulgarianKeys onInsert={insertLetter} />}
-      <button
-        onClick={onSubmit}
-        disabled={!userInput.trim()}
-        className="btn-primary w-full text-lg"
-      >
-        Check
-      </button>
+      <div className="flex gap-2">
+        <button onClick={handleDontKnow} className="btn-soft shrink-0 text-base">
+          {giveUpLabel}
+        </button>
+        <button
+          onClick={onSubmit}
+          disabled={!userInput.trim()}
+          className="btn-primary flex-1 text-lg"
+        >
+          Check
+        </button>
+      </div>
     </>
   );
 
@@ -413,7 +423,7 @@ export default function ReviewSession({
         </div>
 
         {phase === "answering" &&
-          answerBox(handleFirstCheck, `Type the full ${targetLang} sentence…`)}
+          answerBox(handleFirstCheck, `Type the full ${targetLang} sentence…`, "I don't know")}
 
         {phase === "hint" && (
           <div className="space-y-4">
@@ -436,6 +446,12 @@ export default function ReviewSession({
                 Try again
               </button>
             </div>
+            <button
+              onClick={handleDontKnow}
+              className="w-full text-sm font-semibold text-muted hover:text-ink"
+            >
+              Just show me the answer
+            </button>
           </div>
         )}
 
@@ -451,7 +467,7 @@ export default function ReviewSession({
                 <p className="text-lg font-bold text-amber-700 dark:text-amber-300">Give it another shot!</p>
               </div>
             )}
-            {answerBox(handleSecondCheck, "Try again…")}
+            {answerBox(handleSecondCheck, "Try again…", "Show answer")}
           </div>
         )}
 
@@ -459,17 +475,38 @@ export default function ReviewSession({
           <div className="space-y-4">
             <div
               className={`rounded-2xl px-4 py-4 text-center ${
-                finalCorrect ? "bg-lime-300" : "bg-orange-50 dark:bg-orange-400/10"
+                finalCorrect
+                  ? "bg-lime-300"
+                  : gaveUp
+                    ? "bg-ink/[0.05]"
+                    : "bg-orange-50 dark:bg-orange-400/10"
               }`}
             >
-              <p className={`text-xl font-bold ${finalCorrect ? "text-on-lime" : "text-orange-700 dark:text-orange-300"}`}>
+              <p
+                className={`text-xl font-bold ${
+                  finalCorrect
+                    ? "text-on-lime"
+                    : gaveUp
+                      ? "text-ink"
+                      : "text-orange-700 dark:text-orange-300"
+                }`}
+              >
                 {finalCorrect
                   ? gotItSecondTry
                     ? "Got it on the second try!"
                     : "Nice work!"
-                  : "Keep practicing!"}
+                  : gaveUp
+                    ? "Here's the answer"
+                    : "Keep practising!"}
               </p>
-              {lastCardScore && (
+              {gaveUp && (
+                <p className="mt-0.5 text-sm font-medium text-muted">
+                  {mode === "review"
+                    ? "No problem, this card will come back soon."
+                    : "No problem, it's marked to practise."}
+                </p>
+              )}
+              {lastCardScore && !gaveUp && (
                 <p
                   className={`mt-0.5 text-sm font-semibold ${
                     finalCorrect ? "text-on-lime/70" : "text-orange-600 dark:text-orange-300"
@@ -484,14 +521,16 @@ export default function ReviewSession({
 
             {!finalCorrect && (
               <div className="space-y-3">
+                {userInput.trim() && !gaveUp && (
                 <div>
                   <p className="eyebrow mb-1">Your answer</p>
                   <p className="text-lg text-ink-soft line-through decoration-orange-400/60">
                     {userInput}
                   </p>
                 </div>
+                )}
                 <div>
-                  <p className="eyebrow mb-1">Correct answer</p>
+                  <p className="eyebrow mb-1">{gaveUp ? "Answer" : "Correct answer"}</p>
                   <p className="text-lg font-semibold text-lime-700 dark:text-lime-300">{expectedAnswer}</p>
                 </div>
               </div>

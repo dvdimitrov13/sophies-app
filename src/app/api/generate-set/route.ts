@@ -25,11 +25,13 @@ For each card:
 - englishWord: the English word or short phrase, lowercase.
 - bulgarianWord: the most common, basic Bulgarian translation in Cyrillic, the form a beginner learns first.
 - bulgarianSentence: a short, natural sentence (3-8 words) using only A1-A2 vocabulary. It must contain bulgarianWord in exactly that form, because the app highlights the word inside the sentence.
-- englishSentence: a natural English translation of that sentence. It must contain englishWord in exactly that form too (write numbers as words, e.g. "eighteen", not "18" or "6 p.m."), since the app highlights it when asking in the other direction.
+- englishSentence: a natural British English translation of that sentence. It must contain englishWord in exactly that form too (write numbers as words, e.g. "eighteen", not "18" or "6 p.m."), since the app highlights it when asking in the other direction.
 - topic: the Bulgarian name of the topic the word belongs to (for example "числа", not "numbers").
 
 Topics. The learner's current topics are: ${topicList}.
 Use one of these whenever a word reasonably fits. Only when several words in this set clearly belong together and none of the current topics fits them, create a new topic: a short, lowercase Bulgarian name (one or two words, like the existing ones), and list it once in newTopics with its English name and one fitting emoji. Never create a topic for a single stray word (use "друго" for that), and never create one that overlaps an existing topic.
+
+Write English the British way (colour, mum, flat, holiday). The learner's name is Sophie (Софи in Bulgarian); now and then, use her name in a sentence where it fits naturally, e.g. "Софи пие кафе." Don't use it in every sentence.
 
 Return at most ${MAX_CARDS} cards, in a sensible learning order (for numbers, ascending). If the request asks for more than that, return the first ${MAX_CARDS} and say so in note. If nothing new fits the request, return no cards and explain why in note. Keep note to one short, friendly sentence for the learner; if you created a new topic, mention it.`;
 }
