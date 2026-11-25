@@ -1,4 +1,5 @@
 import { CardScore, ReviewDirection } from "./types";
+import { Rating, type Grade } from "./spaced-repetition";
 
 export function calculateCardScore(
   firstTryCorrect: boolean,
@@ -25,12 +26,14 @@ export function calculateCardScore(
   return { basePoints, lookupPenalty, totalPoints, direction };
 }
 
-export function scoreToQuality(score: CardScore): number {
+/**
+ * Maps an answer onto an FSRS grade, the way Anki's buttons would:
+ * right first time with at most one lookup = Good, right but with a struggle
+ * (second try, hint, or several lookups) = Hard, wrong = Again.
+ */
+export function scoreToGrade(score: CardScore): Grade {
   const p = score.totalPoints;
-  if (p >= 90) return 5;
-  if (p >= 70) return 4;
-  if (p >= 50) return 3;
-  if (p >= 30) return 2;
-  if (p >= 10) return 1;
-  return 0;
+  if (p >= 90) return Rating.Good;
+  if (p > 0) return Rating.Hard;
+  return Rating.Again;
 }

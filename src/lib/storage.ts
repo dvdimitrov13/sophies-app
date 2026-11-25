@@ -1,4 +1,14 @@
-import { Flashcard } from "./types";
+import { DirectionPref, Flashcard, UserStats } from "./types";
+import type { TopicMeta } from "./topics";
+import { localDateKey } from "./streak";
+
+const EMPTY_STATS: UserStats = {
+  totalScore: 0,
+  currentStreak: 0,
+  longestStreak: 0,
+  lastStudyDate: null,
+  directionPref: "mixed",
+};
 
 export async function loadCards(): Promise<Flashcard[]> {
   const res = await fetch("/api/cards");
@@ -19,6 +29,44 @@ export async function addCard(card: Flashcard): Promise<{ error?: string }> {
   return {};
 }
 
+/** Adds several cards at once; the server skips words already in the deck. */
+export async function importCards(
+  cards: Flashcard[]
+): Promise<{ added: Flashcard[]; error?: string }> {
+  try {
+    const res = await fetch("/api/cards/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cards }),
+    });
+    const data = await res.json().catch(() => ({}));
+    const added: Flashcard[] = Array.isArray(data.added) ? data.added : [];
+    if (!res.ok) {
+      return { added, error: data.error || "Couldn't add the words. Please try again." };
+    }
+    return { added };
+  } catch {
+    return { added: [], error: "Couldn't reach the server. Please try again." };
+  }
+}
+
+export async function loadTopics(): Promise<TopicMeta[]> {
+  const res = await fetch("/api/topics");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+/** Saves new topics the generator created; returns every custom topic. */
+export async function saveTopics(topics: TopicMeta[]): Promise<TopicMeta[] | null> {
+  const res = await fetch("/api/topics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topics }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function updateCard(card: Flashcard): Promise<void> {
   await fetch("/api/cards", {
     method: "PUT",
@@ -27,22 +75,33 @@ export async function updateCard(card: Flashcard): Promise<void> {
   });
 }
 
-export async function loadStats(): Promise<{ totalScore: number }> {
-  const res = await fetch("/api/stats");
-  if (!res.ok) return { totalScore: 0 };
-  return res.json();
-}
-
-export async function addToScore(
-  points: number
-): Promise<{ totalScore: number }> {
+async function putStats(body: object): Promise<UserStats | null> {
   const res = await fetch("/api/stats", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ addPoints: points }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) return { totalScore: 0 };
+  if (!res.ok) return null;
   return res.json();
+}
+
+export async function loadStats(): Promise<UserStats> {
+  const res = await fetch("/api/stats");
+  if (!res.ok) return EMPTY_STATS;
+  return { ...EMPTY_STATS, ...(await res.json()) };
+}
+
+export function addToScore(points: number): Promise<UserStats | null> {
+  return putStats({ addPoints: points });
+}
+
+/** Marks today as a study day for the streak. */
+export function recordStudyDay(): Promise<UserStats | null> {
+  return putStats({ studiedOn: localDateKey() });
+}
+
+export function saveDirectionPref(directionPref: DirectionPref): Promise<UserStats | null> {
+  return putStats({ directionPref });
 }
 
 export function isDuplicate(cards: Flashcard[], englishWord: string): boolean {

@@ -32,23 +32,26 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Софи&apos;s Bulgarian
+          <div className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-lime-400 text-3xl font-black text-on-lime shadow-[inset_0_-4px_0_rgba(20,23,15,0.15)]">
+            Б
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Bulganki
           </h1>
-          <p className="text-gray-500 mt-2">Sign in to continue</p>
+          <p className="text-muted mt-1">Sign in to keep your streak going</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 space-y-4"
+          className="surface p-6 space-y-4"
         >
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="eyebrow mb-1.5 block"
             >
               Email
             </label>
@@ -57,7 +60,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-gray-900 bg-white"
+              className="field"
               placeholder="sophie@coolness.com"
               required
             />
@@ -66,7 +69,7 @@ export default function LoginPage() {
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-1"
+              className="eyebrow mb-1.5 block"
             >
               Password
             </label>
@@ -75,19 +78,19 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-gray-900 bg-white"
+              className="field"
               required
             />
           </div>
 
           {error && (
-            <p className="text-red-600 text-sm text-center">{error}</p>
+            <p className="text-orange-600 text-sm text-center font-medium">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold text-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            className="btn-primary w-full text-lg"
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
