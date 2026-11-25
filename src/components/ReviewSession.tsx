@@ -1,36 +1,99 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Flashcard, ReviewDirection, CardScore } from "@/lib/types";
-import {
-  getCardsForReview,
-  reviewCard,
-  chooseDirection,
-} from "@/lib/spaced-repetition";
-import { calculateCardScore, scoreToQuality } from "@/lib/scoring";
+import { useState } from "react";
+import { Flashcard, ReviewDirection, CardScore, DirectionPref } from "@/lib/types";
+import { reviewCard, chooseDirection } from "@/lib/spaced-repetition";
+import { calculateCardScore, scoreToGrade } from "@/lib/scoring";
 import ClickableWords from "./ClickableWords";
 
 type Phase = "answering" | "hint" | "retrying" | "result";
 
+export type SessionMode = "review" | "test";
+
 interface Props {
-  cards: Flashcard[];
-  onUpdateCard: (card: Flashcard) => void;
+  /** Cards for this session, in order. Captured when the session starts. */
+  queue: Flashcard[];
+  /** Review reschedules cards with FSRS; a test only scores them. */
+  mode: SessionMode;
+  title: string;
+  directionPref: DirectionPref;
+  onDirectionChange: (pref: DirectionPref) => void;
+  onUpdateCard?: (card: Flashcard) => void;
+  /** Called after each answer (used for the daily streak). */
+  onAnswered: () => void;
   onSessionComplete: (points: number) => void;
+  onRestart: () => void;
+  restartLabel: string;
+  onExit?: () => void;
+  empty?: React.ReactNode;
+}
+
+interface Answer {
+  card: Flashcard;
+  score: CardScore;
+  correct: boolean;
+}
+
+const DIRECTION_OPTIONS: { value: DirectionPref; label: string; title: string }[] = [
+  { value: "en-to-bg", label: "EN → BG", title: "Always translate English into Bulgarian" },
+  { value: "bg-to-en", label: "BG → EN", title: "Always translate Bulgarian into English" },
+  { value: "mixed", label: "Mixed", title: "Mix both; well-known words lean EN → BG" },
+];
+
+function DirectionSwitch({
+  value,
+  onChange,
+}: {
+  value: DirectionPref;
+  onChange: (pref: DirectionPref) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label="Question direction" className="flex rounded-full bg-black/[0.05] p-0.5 text-xs">
+      {DIRECTION_OPTIONS.map((o) => (
+        <button
+          key={o.value}
+          role="radio"
+          aria-checked={value === o.value}
+          title={o.title}
+          onClick={() => onChange(o.value)}
+          className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
+            value === o.value ? "bg-ink text-lime-300" : "text-muted hover:text-ink"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function normalize(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[.,!?;:'"—–\-()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export default function ReviewSession({
-  cards,
+  queue,
+  mode,
+  title,
+  directionPref,
+  onDirectionChange,
   onUpdateCard,
+  onAnswered,
   onSessionComplete,
+  onRestart,
+  restartLabel,
+  onExit,
+  empty,
 }: Props) {
-  const snapshotRef = useRef<Flashcard[] | null>(null);
-  const directionsRef = useRef<ReviewDirection[]>([]);
-  if (snapshotRef.current === null) {
-    const due = getCardsForReview(cards);
-    snapshotRef.current = due;
-    directionsRef.current = due.map((c) => chooseDirection(c));
-  }
-  const dueCards = snapshotRef.current;
+  const [cards] = useState(queue);
+  // Mixed-mode directions, picked once per session so they don't reshuffle.
+  const [mixedDirections] = useState<ReviewDirection[]>(() =>
+    queue.map((c) => chooseDirection(c))
+  );
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userInput, setUserInput] = useState("");
@@ -44,107 +107,100 @@ export default function ReviewSession({
   const [gotItSecondTry, setGotItSecondTry] = useState(false);
   const [wordLookups, setWordLookups] = useState(0);
   const [lastCardScore, setLastCardScore] = useState<CardScore | null>(null);
-  const [sessionPoints, setSessionPoints] = useState(0);
-  const [cardScores, setCardScores] = useState<CardScore[]>([]);
-  const [score, setScore] = useState({ correct: 0, incorrect: 0 });
+  const [answers, setAnswers] = useState<Answer[]>([]);
+  // Once you start on a card its direction stays put; a new setting applies
+  // from the next card.
+  const [lockedDirection, setLockedDirection] = useState<ReviewDirection | null>(null);
 
-  if (dueCards.length === 0 && !sessionDone) {
-    return (
-      <div className="max-w-lg mx-auto text-center py-12">
-        <div className="text-6xl mb-4">🎉</div>
-        <h2 className="text-2xl font-bold mb-2">No cards due for review!</h2>
-        <p className="text-gray-500">
-          Add some new words or come back later when cards are due.
-        </p>
-      </div>
-    );
+  const sessionPoints = answers.reduce((n, a) => n + a.score.totalPoints, 0);
+
+  if (cards.length === 0) {
+    return <>{empty}</>;
   }
 
   if (sessionDone) {
+    const correct = answers.filter((a) => a.correct).length;
+    const percent = Math.round((correct / answers.length) * 100);
     return (
-      <div className="max-w-lg mx-auto text-center py-12">
-        <div className="text-6xl mb-4">✅</div>
-        <h2 className="text-2xl font-bold mb-2">Session Complete!</h2>
-        <div className="text-4xl font-bold text-indigo-600 mt-4">
-          {sessionPoints} pts
-        </div>
-        <div className="flex justify-center gap-8 mt-6">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-green-600">
-              {score.correct}
-            </div>
-            <div className="text-sm text-gray-500">Correct</div>
+      <div className="mx-auto max-w-lg">
+        <div className="surface overflow-hidden">
+          <div className="bg-ink px-6 pt-8 pb-7 text-center text-white">
+            <p className="eyebrow text-lime-300/80">
+              {mode === "test" ? "Test complete" : "Session complete"}
+            </p>
+            <p className="mt-2 text-6xl font-bold tracking-tight text-lime-300">
+              {mode === "test" ? `${percent}%` : `+${sessionPoints}`}
+            </p>
+            <p className="mt-1 text-white/60">
+              {mode === "test"
+                ? `${correct} of ${answers.length} right · +${sessionPoints} pts`
+                : "points earned"}
+            </p>
           </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-orange-500">
-              {score.incorrect}
+          <div className="grid grid-cols-2 divide-x divide-black/5 border-b border-black/5">
+            <div className="py-4 text-center">
+              <div className="text-2xl font-bold text-lime-600">{correct}</div>
+              <div className="text-sm text-muted">Correct</div>
             </div>
-            <div className="text-sm text-gray-500">Needs practice</div>
-          </div>
-        </div>
-        {cardScores.length > 0 && (
-          <div className="mt-6 space-y-1 text-sm text-gray-500">
-            {cardScores.map((cs, i) => (
-              <div key={i} className="flex justify-between max-w-xs mx-auto">
-                <span>
-                  {dueCards[i]?.englishWord}{" "}
-                  <span className="text-xs text-gray-400">
-                    {cs.direction === "en-to-bg" ? "EN→BG" : "BG→EN"}
-                  </span>
-                </span>
-                <span className="font-medium text-gray-700">
-                  {cs.totalPoints} pts
-                </span>
+            <div className="py-4 text-center">
+              <div className="text-2xl font-bold text-orange-500">
+                {answers.length - correct}
               </div>
-            ))}
+              <div className="text-sm text-muted">Needs practice</div>
+            </div>
           </div>
-        )}
-        <button
-          onClick={() => {
-            setCurrentIndex(0);
-            setSessionDone(false);
-            setScore({ correct: 0, incorrect: 0 });
-            setSessionPoints(0);
-            setCardScores([]);
-            snapshotRef.current = null;
-            directionsRef.current = [];
-          }}
-          className="mt-8 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
-        >
-          Review Again
-        </button>
+          <ul className="max-h-72 divide-y divide-black/5 overflow-y-auto px-6">
+            {answers.map((a, i) => (
+              <li key={i} className="flex items-center justify-between py-2.5 text-sm">
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`grid size-5 place-items-center rounded-full text-[11px] font-bold ${
+                      a.correct ? "bg-lime-300 text-ink" : "bg-orange-100 text-orange-600"
+                    }`}
+                  >
+                    {a.correct ? "✓" : "✗"}
+                  </span>
+                  <span className="font-medium">{a.card.englishWord}</span>
+                  <span className="text-muted">{a.card.bulgarianWord}</span>
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {a.score.totalPoints} pts
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 p-4">
+            {onExit && (
+              <button onClick={onExit} className="btn-soft flex-1">
+                Done
+              </button>
+            )}
+            <button onClick={onRestart} className="btn-primary flex-1">
+              {restartLabel}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const card = dueCards[currentIndex];
-  const direction = directionsRef.current[currentIndex];
+  const card = cards[currentIndex];
+  const direction: ReviewDirection =
+    lockedDirection ??
+    (directionPref === "mixed" ? mixedDirections[currentIndex] : directionPref);
+
+  function lockDirection() {
+    if (!lockedDirection) setLockedDirection(direction);
+  }
   const isEnToBg = direction === "en-to-bg";
 
-  // Direction-dependent fields
   const promptWord = isEnToBg ? card.englishWord : card.bulgarianWord;
-  const promptSentence = isEnToBg
-    ? card.englishSentence
-    : card.bulgarianSentence;
-  const expectedAnswer = isEnToBg
-    ? card.bulgarianSentence
-    : card.englishSentence;
-  const promptLang = isEnToBg ? "English" : "Български";
+  const promptSentence = isEnToBg ? card.englishSentence : card.bulgarianSentence;
+  const expectedAnswer = isEnToBg ? card.bulgarianSentence : card.englishSentence;
   const targetLang = isEnToBg ? "Bulgarian" : "English";
   const sentenceLang: "bg" | "en" = isEnToBg ? "en" : "bg";
 
-  function normalize(str: string): string {
-    return str
-      .toLowerCase()
-      .replace(/[.,!?;:'"—–\-()]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function finishCard(
-    firstTryCorrect: boolean,
-    secondTryCorrect: boolean
-  ) {
+  function finishCard(firstTryCorrect: boolean, secondTryCorrect: boolean) {
     const cardScore = calculateCardScore(
       firstTryCorrect,
       secondTryCorrect,
@@ -152,24 +208,21 @@ export default function ReviewSession({
       wordLookups,
       direction
     );
-    const quality = scoreToQuality(cardScore);
-    const updated = reviewCard(card, quality);
-    onUpdateCard(updated);
+
+    if (mode === "review" && onUpdateCard) {
+      reviewCard(card, scoreToGrade(cardScore)).then(onUpdateCard);
+    }
+    onAnswered();
 
     setLastCardScore(cardScore);
-    setSessionPoints((prev) => prev + cardScore.totalPoints);
-    setCardScores((prev) => [...prev, cardScore]);
-
-    const isCorrect = firstTryCorrect || secondTryCorrect;
-    setScore((prev) => ({
-      correct: prev.correct + (isCorrect ? 1 : 0),
-      incorrect: prev.incorrect + (isCorrect ? 0 : 1),
-    }));
+    setAnswers((prev) => [
+      ...prev,
+      { card, score: cardScore, correct: firstTryCorrect || secondTryCorrect },
+    ]);
   }
 
   function handleFirstCheck() {
-    const correct = normalize(userInput) === normalize(expectedAnswer);
-    if (correct) {
+    if (normalize(userInput) === normalize(expectedAnswer)) {
       setFinalCorrect(true);
       setGotItSecondTry(false);
       setPhase("result");
@@ -190,18 +243,13 @@ export default function ReviewSession({
         body: JSON.stringify({
           userAttempt: firstAttempt,
           correctSentence: expectedAnswer,
-          englishSentence: isEnToBg
-            ? card.englishSentence
-            : card.bulgarianSentence,
+          englishSentence: isEnToBg ? card.englishSentence : card.bulgarianSentence,
           englishWord: isEnToBg ? card.englishWord : card.bulgarianWord,
           direction,
         }),
       });
       const data = await res.json();
-      setHint(
-        data.hint ||
-          "Try thinking about each word in the sentence one at a time."
-      );
+      setHint(data.hint || "Try thinking about each word in the sentence one at a time.");
     } catch {
       setHint("Try thinking about each word in the sentence one at a time.");
     } finally {
@@ -218,13 +266,8 @@ export default function ReviewSession({
 
   function handleSecondCheck() {
     const correct = normalize(userInput) === normalize(expectedAnswer);
-    if (correct) {
-      setFinalCorrect(true);
-      setGotItSecondTry(true);
-    } else {
-      setFinalCorrect(false);
-      setGotItSecondTry(false);
-    }
+    setFinalCorrect(correct);
+    setGotItSecondTry(correct);
     finishCard(false, correct);
     setPhase("result");
   }
@@ -239,7 +282,8 @@ export default function ReviewSession({
     setGotItSecondTry(false);
     setWordLookups(0);
     setLastCardScore(null);
-    if (currentIndex + 1 >= dueCards.length) {
+    setLockedDirection(null);
+    if (currentIndex + 1 >= cards.length) {
       setSessionDone(true);
       onSessionComplete(sessionPoints);
     } else {
@@ -247,175 +291,161 @@ export default function ReviewSession({
     }
   }
 
+  const answerBox = (onSubmit: () => void, placeholder: string) => (
+    <>
+      <textarea
+        value={userInput}
+        onChange={(e) => {
+          lockDirection();
+          setUserInput(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (userInput.trim()) onSubmit();
+          }
+        }}
+        placeholder={placeholder}
+        className="field resize-none"
+        rows={2}
+        autoFocus
+      />
+      <button
+        onClick={onSubmit}
+        disabled={!userInput.trim()}
+        className="btn-primary w-full text-lg"
+      >
+        Check
+      </button>
+    </>
+  );
+
+  const progress = (currentIndex + (phase === "result" ? 1 : 0)) / cards.length;
+
   return (
-    <div className="max-w-lg mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Review</h2>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-indigo-600">
-            {sessionPoints} pts
-          </span>
-          <span className="text-sm text-gray-500">
-            {currentIndex + 1} / {dueCards.length}
+    <div className="mx-auto max-w-lg">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {onExit && (
+            <button
+              onClick={onExit}
+              aria-label="Leave test"
+              className="grid size-9 shrink-0 place-items-center rounded-full bg-black/[0.04] text-lg hover:bg-black/[0.08]"
+            >
+              ←
+            </button>
+          )}
+          <h2 className="truncate text-2xl font-bold tracking-tight">{title}</h2>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="chip bg-lime-300/60 text-ink">{sessionPoints} pts</span>
+          <span className="text-sm font-medium text-muted tabular-nums">
+            {currentIndex + 1}/{cards.length}
           </span>
         </div>
       </div>
 
-      <div className="p-6 bg-white rounded-2xl border-2 border-gray-100 shadow-sm space-y-4">
-        {/* Direction badge + prompt */}
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              isEnToBg
-                ? "bg-purple-100 text-purple-700"
-                : "bg-teal-100 text-teal-700"
-            }`}
-          >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-xs font-medium text-muted">Ask me</span>
+        <DirectionSwitch value={directionPref} onChange={onDirectionChange} />
+      </div>
+
+      <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
+        <div
+          className="h-full rounded-full bg-lime-400 transition-all duration-500"
+          style={{ width: `${progress * 100}%` }}
+        />
+      </div>
+
+      <div className="surface space-y-5 p-6">
+        <div className="flex items-center justify-between">
+          <span className="chip bg-ink text-xs text-lime-300">
             {isEnToBg ? "EN → BG" : "BG → EN"}
           </span>
-          {wordLookups > 0 && (
-            <span className="text-xs text-orange-500">
-              -{wordLookups * 10} pts (lookups)
-            </span>
-          )}
+          <span className="flex items-center gap-2">
+            {wordLookups > 0 && (
+              <span className="text-xs font-medium text-orange-500">
+                −{wordLookups * 10} pts
+              </span>
+            )}
+            <span className="chip bg-black/[0.04] text-xs text-ink-soft">{card.topic}</span>
+          </span>
         </div>
 
         <div>
-          <span className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            {promptLang}
-          </span>
-          <p className="text-xl font-semibold text-gray-900 mt-1">
-            {promptWord}
-          </p>
+          <p className="eyebrow">{isEnToBg ? "English" : "Български"}</p>
+          <p className="mt-1 text-3xl font-bold tracking-tight">{promptWord}</p>
         </div>
-        <div>
-          <span className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-            Translate this sentence to {targetLang}
-          </span>
-          <div className="text-lg text-indigo-700 font-medium mt-1">
+
+        <div className="rounded-2xl bg-canvas p-4">
+          <p className="eyebrow">Translate to {targetLang}</p>
+          <div className="mt-1.5 text-xl font-medium text-ink">
             <ClickableWords
+              key={currentIndex}
               sentence={promptSentence}
               fromLanguage={sentenceLang}
               targetWord={promptWord}
-              onLookup={() => setWordLookups((n) => n + 1)}
+              onLookup={() => {
+                lockDirection();
+                setWordLookups((n) => n + 1);
+              }}
               disabled={phase === "result"}
             />
           </div>
-          <p className="text-xs text-gray-400 mt-1">
-            Tap a word for its translation (-10 pts each)
-          </p>
+          <p className="mt-2 text-xs text-muted">Tap a word to see it (−10 pts each)</p>
         </div>
 
-        {/* Phase: answering */}
-        {phase === "answering" && (
-          <>
-            <textarea
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (userInput.trim()) handleFirstCheck();
-                }
-              }}
-              placeholder={`Type the full ${targetLang} sentence...`}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-lg resize-none bg-white text-gray-900"
-              rows={2}
-              autoFocus
-            />
-            <button
-              onClick={handleFirstCheck}
-              disabled={!userInput.trim()}
-              className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold text-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            >
-              Check
-            </button>
-          </>
-        )}
+        {phase === "answering" &&
+          answerBox(handleFirstCheck, `Type the full ${targetLang} sentence…`)}
 
-        {/* Phase: hint */}
         {phase === "hint" && (
           <div className="space-y-4">
-            <div className="-mx-6 -mt-2 px-6 py-4 text-center bg-amber-50 rounded-none">
-              <p className="font-bold text-xl text-amber-700">Almost there!</p>
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center">
+              <p className="text-lg font-bold text-amber-700">Almost there!</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
-                Your attempt
-              </p>
-              <p className="text-lg text-gray-600">{firstAttempt}</p>
+              <p className="eyebrow mb-1">Your attempt</p>
+              <p className="text-lg text-ink-soft">{firstAttempt}</p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleGetHint}
                 disabled={hintLoading}
-                className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-semibold text-lg hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                className="btn flex-1 bg-amber-400 text-ink hover:bg-amber-300"
               >
-                {hintLoading ? "Thinking..." : "Get a Hint"}
+                {hintLoading ? "Thinking…" : "Get a hint"}
               </button>
-              <button
-                onClick={handleTryAgain}
-                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-lg hover:bg-gray-200 transition-colors"
-              >
-                Try Again
+              <button onClick={handleTryAgain} className="btn-soft flex-1">
+                Try again
               </button>
             </div>
           </div>
         )}
 
-        {/* Phase: retrying */}
         {phase === "retrying" && (
           <div className="space-y-4">
-            <div className="-mx-6 -mt-2 px-6 py-4 text-center bg-amber-50 rounded-none">
-              <p className="font-bold text-xl text-amber-700">
-                Give it another shot!
-              </p>
-            </div>
-            {hint && (
-              <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                <p className="text-xs font-medium text-blue-400 uppercase tracking-wide mb-1">
-                  Hint
-                </p>
-                <p className="text-gray-700">{hint}</p>
+            {hint ? (
+              <div className="rounded-2xl border border-lime-200 bg-lime-50 p-4">
+                <p className="eyebrow mb-1 text-lime-700">Hint</p>
+                <p className="text-ink-soft">{hint}</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center">
+                <p className="text-lg font-bold text-amber-700">Give it another shot!</p>
               </div>
             )}
-            <textarea
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (userInput.trim()) handleSecondCheck();
-                }
-              }}
-              placeholder="Try again..."
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-lg resize-none bg-white text-gray-900"
-              rows={2}
-              autoFocus
-            />
-            <button
-              onClick={handleSecondCheck}
-              disabled={!userInput.trim()}
-              className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold text-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            >
-              Check
-            </button>
+            {answerBox(handleSecondCheck, "Try again…")}
           </div>
         )}
 
-        {/* Phase: result */}
         {phase === "result" && (
           <div className="space-y-4">
             <div
-              className={`-mx-6 -mt-2 px-6 py-4 text-center rounded-none ${
-                finalCorrect ? "bg-green-100" : "bg-blue-50"
+              className={`rounded-2xl px-4 py-4 text-center ${
+                finalCorrect ? "bg-lime-300" : "bg-orange-50"
               }`}
             >
-              <p
-                className={`font-bold text-xl ${
-                  finalCorrect ? "text-green-700" : "text-blue-700"
-                }`}
-              >
+              <p className={`text-xl font-bold ${finalCorrect ? "text-ink" : "text-orange-700"}`}>
                 {finalCorrect
                   ? gotItSecondTry
                     ? "Got it on the second try!"
@@ -424,8 +454,8 @@ export default function ReviewSession({
               </p>
               {lastCardScore && (
                 <p
-                  className={`text-sm mt-1 font-medium ${
-                    finalCorrect ? "text-green-600" : "text-blue-600"
+                  className={`mt-0.5 text-sm font-semibold ${
+                    finalCorrect ? "text-ink/70" : "text-orange-600"
                   }`}
                 >
                   +{lastCardScore.totalPoints} pts
@@ -436,49 +466,32 @@ export default function ReviewSession({
             </div>
 
             {!finalCorrect && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
-                    Your answer
+                  <p className="eyebrow mb-1">Your answer</p>
+                  <p className="text-lg text-ink-soft line-through decoration-orange-400/60">
+                    {userInput}
                   </p>
-                  <p className="text-lg text-gray-600">{userInput}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
-                    Correct answer
-                  </p>
-                  <p className="text-lg font-semibold text-green-700">
-                    {expectedAnswer}
-                  </p>
+                  <p className="eyebrow mb-1">Correct answer</p>
+                  <p className="text-lg font-semibold text-lime-700">{expectedAnswer}</p>
                 </div>
               </div>
             )}
 
             {finalCorrect && gotItSecondTry && (
               <div>
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
-                  The sentence
-                </p>
-                <p className="text-lg font-semibold text-green-700">
-                  {expectedAnswer}
-                </p>
+                <p className="eyebrow mb-1">The sentence</p>
+                <p className="text-lg font-semibold text-lime-700">{expectedAnswer}</p>
               </div>
             )}
 
-            <button
-              onClick={handleNext}
-              className="w-full py-3 bg-gray-800 text-white rounded-xl font-semibold text-lg hover:bg-gray-900 transition-colors"
-            >
-              Next Card
+            <button onClick={handleNext} autoFocus className="btn-dark w-full text-lg">
+              {currentIndex + 1 >= cards.length ? "See results" : "Next card"}
             </button>
           </div>
         )}
-      </div>
-
-      <div className="mt-4 flex justify-center">
-        <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-sm">
-          {card.topic}
-        </span>
       </div>
     </div>
   );
